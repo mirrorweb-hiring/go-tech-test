@@ -128,6 +128,36 @@ func Test_DomainStatTracker(t *testing.T) {
 				"domain05.com": 1, "domain06.com": 1, "domain07.com": 1, "domain08.com": 1, "domain09.com": 1,
 			},
 		},
+		{
+			name: "Inserting 10 new domains and 10 existing concurrently in non-alphabetical order",
+			setup: func(tracker *emaildomainstats.DomainStatTracker, locker *customLocker) {
+				var wg sync.WaitGroup
+				wg.Add(20)
+
+				// Adds 10 non-existing domains
+				for i := 0; i < 10; i++ {
+					go func(i int) {
+						defer wg.Done()
+						tracker.Add(fmt.Sprintf("domain%02d.com", (i*7)%10))
+					}(i)
+				}
+
+				// Adds 10 times the same existing domain
+				for i := 0; i < 10; i++ {
+					go func(i int) {
+						defer wg.Done()
+						tracker.Add("domain04.com")
+					}(i)
+				}
+
+				wg.Wait()
+			},
+			expectedLock: 10,
+			expected: map[string]int64{
+				"domain00.com": 1, "domain01.com": 1, "domain02.com": 1, "domain03.com": 1, "domain04.com": 11,
+				"domain05.com": 1, "domain06.com": 1, "domain07.com": 1, "domain08.com": 1, "domain09.com": 1,
+			},
+		},
 	}
 
 	for _, tt := range testCases {
